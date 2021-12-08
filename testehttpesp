@@ -1,0 +1,222 @@
+// ############# LIBRARIES ############### //
+
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+
+// ############# VARIABLES ############### //
+
+const char* SSID = "..:WN FIBRA:.. Maria"; // rede wifi
+const char* PASSWORD = "999280886"; // senha da rede wifi
+
+String BASE_URL = "http://192.168.100.86:8080/";
+WiFiClient wifiClient;
+
+// ############# PROTOTYPES ############### //
+
+void initSerial();
+void initWiFi();
+void httpRequest(String path);
+
+// ############### OBJECTS ################# //
+
+WiFiClient client;
+HTTPClient http;
+
+// ############## SETUP ################# //
+
+void setup() {
+  initSerial();
+  initWiFi();
+}
+
+// ############### LOOP ################# //
+
+void loop() {
+  if (Serial.available() > 0) {
+    String uid = Serial.readString();
+
+
+    Serial.print("Buscando Colaborador, uid: ");
+    Serial.println(uid);
+
+    String url_get_uid =  "v1/protected/registroponto/listarPorUid";
+    uid.trim();
+    String s_id_func = searchUid(url_get_uid, uid);
+    s_id_func.trim();
+    if (s_id_func != "") {
+      int id_func = s_id_func.toInt();
+      Serial.print("Id encontrado: ");
+      Serial.println(s_id_func);
+
+      String url_tem_rps =  "v1/protected/registroponto/listarRpsPorIdColaborador";
+      String s_temRps = temRps(url_tem_rps, s_id_func);
+
+      if (s_temRps != "") {
+        int isTemRps = s_temRps.toInt();
+        Serial.print("Tem rp? ");
+        Serial.println(s_temRps);
+
+        if (isTemRps == 1) {
+          //colaborador antigo
+          //verifica o numero de rps do dia
+          String url_num_rps =  "v1/protected/registroponto/listarNumRpsColaboradorPorDia";
+          String s_numRps = numRps(url_num_rps, s_id_func);
+          if (s_numRps != "") {
+            int numRps = s_numRps.toInt();
+            Serial.print("Numero de  rps: ");
+            Serial.println(s_numRps);
+
+            String url_inserir_rp =  "v1/protected/registroponto/inserirRegistroPontoPorIdColaborador";
+            int movimentacao = numRps + 1;
+            String s_mov_final = String(movimentacao);  
+            String s_inserir = inserirRegistroPonto(url_inserir_rp, s_id_func, s_mov_final, "Relogio de Ponto Matriz");
+
+            Serial.print("Resultado: ");
+            Serial.println(s_inserir);
+
+
+          } else {
+            Serial.println("Erro ao pesquisar numero de RPs do dia");
+
+          }
+
+
+        } else {
+          //novo colaborador
+        }
+
+
+      } else {
+        Serial.println("Erro ao pesquisar RPs");
+
+      }
+
+    } else {
+      Serial.println("Erro ao pesquisar o UID");
+
+    }
+
+
+
+
+  }
+
+}
+
+String numRps(String path, String id)
+{
+  http.begin(wifiClient, BASE_URL + path);
+  http.addHeader("content-type", "application/json");
+  String body = "{ \"id\": \"" + id + "\"}";
+  int httpCode = http.POST(body);
+  if (httpCode < 0) {
+    Serial.println("request error - " + httpCode);
+    return "";
+  }
+  if (httpCode != HTTP_CODE_OK) {
+    return "";
+  }
+  String response =  http.getString();
+  http.end();
+
+  return response;
+}
+
+
+String temRps(String path, String id)
+{
+  http.begin(wifiClient, BASE_URL + path);
+  http.addHeader("content-type", "application/json");
+  String body = "{ \"id\": \"" + id + "\"}";
+  int httpCode = http.POST(body);
+  if (httpCode < 0) {
+    Serial.println("request error - " + httpCode);
+    return "";
+  }
+  if (httpCode != HTTP_CODE_OK) {
+    return "";
+  }
+  String response =  http.getString();
+  http.end();
+
+  return response;
+}
+
+String searchUid(String path, String uid)
+{
+  http.begin(wifiClient, BASE_URL + path);
+  http.addHeader("content-type", "application/json");
+  String body = "{ \"uid\": \"" + uid + "\"}";
+  int httpCode = http.POST(body);
+  if (httpCode < 0) {
+    Serial.println("request error - " + httpCode);
+    return "";
+  }
+  if (httpCode != HTTP_CODE_OK) {
+    return "";
+  }
+  String response =  http.getString();
+  http.end();
+
+  return response;
+}
+
+String inserirRegistroPonto(String path, String id, String movimentacao, String motivo)
+{
+  http.begin(wifiClient, BASE_URL + path);
+  http.addHeader("content-type", "application/json");
+  String body = "{\"id\": \"" + id + "\",\"movimentacao\": \"" + movimentacao + "\",\"motivo\": \"" +motivo + "\"}";
+  int httpCode = http.POST(body);
+  if (httpCode < 0) {
+    Serial.println("request error - " + httpCode);
+    return "";
+  }
+  if (httpCode != HTTP_CODE_OK) {
+    return "";
+  }
+  String response =  http.getString();
+  http.end();
+
+  return response;
+}
+
+
+
+String makeLogin(String path)
+{
+  http.begin(wifiClient, BASE_URL + path);
+  http.addHeader("content-type", "application/json");
+  String body = "{\"login\":\"aislan1\",\"senha\":\"1234\"}";
+  int httpCode = http.POST(body);
+  if (httpCode < 0) {
+    Serial.println("request error - " + httpCode);
+    return "";
+  }
+  if (httpCode != HTTP_CODE_OK) {
+    return "";
+  }
+  String response =  http.getString();
+  http.end();
+
+  return response;
+}
+
+
+void initSerial() {
+  Serial.begin(115200);
+}
+
+void initWiFi() {
+  delay(10);
+  Serial.println("Conectando-se em: " + String(SSID));
+
+  WiFi.begin(SSID, PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("Conectado na Rede " + String(SSID) + " | IP => ");
+  Serial.println(WiFi.localIP());
+}
